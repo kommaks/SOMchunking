@@ -1,0 +1,24 @@
+# experiments_config.yaml
+datasets:
+  - delucionqa
+  #- finqa
+
+experiments:
+  # ── SOM ─────────────────────────────────
+  - {method: som, rare_percent: 0.4}
+  #- {method: som, rare_percent: 0.6}
+  #- {method: som, rare_percent: 0.8}
+
+  # ── Standard ───────────────────────────
+  - {method: standard, threshold_standard: 0.7}
+
+  # ── Double-pass ────────────────────────
+  - {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.6, merging_threshold: 0.6}
+  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.6, merging_threshold: 0.9}
+  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.9, merging_threshold: 0.6}
+  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.9, merging_threshold: 0.9}
+
+  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.6, merging_threshold: 0.6}
+  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.6, merging_threshold: 0.9}
+  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.9, merging_threshold: 0.6}
+  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.9, merging_threshold: 0.9}
