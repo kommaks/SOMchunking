@@ -1,35 +1,48 @@
 import torch
-from scipy.special import softmax
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
 
 FIXED_TEMPERATURE = 0.7
 
-def initialize_models(device):
-    embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    embedding_model.to(device)
-    generation_model_name = "Qwen/Qwen2.5-7B-Instruct"
+def initialize_models(device: torch.device | str):
+    """
+    Возвращает (embedding_model, generation_model, tokenizer).
+    Phi-2 грузим в FP16 без quantization – bnb-0.42.0 не нужен.
+    """
+    emb_model = SentenceTransformer("all-MiniLM-L6-v2").to(device)
+
+    llm_name = "microsoft/phi-2"
     torch.cuda.empty_cache()
-    tokenizer = AutoTokenizer.from_pretrained(generation_model_name)
-    generation_model = AutoModelForCausalLM.from_pretrained(
-        generation_model_name,
+
+    gen_model = AutoModelForCausalLM.from_pretrained(
+        llm_name,
         torch_dtype=torch.float16,
-        device_map="auto"
+        device_map="auto",
+        trust_remote_code=True,     # обязательно для phi-2
     )
-    tokenizer.pad_token = tokenizer.eos_token
-    generation_model.config.pad_token_id = tokenizer.eos_token_id
-    return embedding_model, generation_model, tokenizer
 
-# =============================================================================
-# Answer generation and evaluation functions (remain unchanged)
-# =============================================================================
+    tok = AutoTokenizer.from_pretrained(llm_name, trust_remote_code=True)
+    if tok.pad_token is None:
+        tok.pad_token = tok.eos_token
+    gen_model.config.pad_token_id = tok.pad_token_id
+    
+    from sentence_transformers import CrossEncoder        # new import
+
+    JUDGE_MODEL_NAME = "cross-encoder/nli-deberta-v3-base"   # 78 M params, ~1 GB vRAM
+    judge_model = CrossEncoder(JUDGE_MODEL_NAME)   # ← same CUDA device
+
+    return emb_model, gen_model, tok, judge_model
 
 
-def generate_answer(question, relevant_chunks, generation_model, tokenizer, max_new_tokens=100):
+def generate_answer(
+    question: str,
+    relevant_chunks: list[str],
+    generation_model,
+    tokenizer,
+    max_new_tokens: int = 128,
+):
     try:
-        context = " ".join(relevant_chunks)
-        context = " ".join(context.split()[:256])
+        context = " ".join(relevant_chunks)[:4096]  # safety cut
         prompt = f"""
         You are an expert in data analysis and clear communication. Based on the context provided, answer the following question in a clear, definitive, and detailed manner. Your answer should:
 
@@ -61,72 +74,62 @@ def generate_answer(question, relevant_chunks, generation_model, tokenizer, max_
         Question: {question}
         Answer:
         """
-        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, padding=True)
-        gen_device = next(generation_model.parameters()).device
-        inputs = {key: value.to(gen_device) for key, value in inputs.items()}
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
+        inputs = {k: v.to(generation_model.device) for k, v in inputs.items()}
+
         with torch.no_grad():
             outputs = generation_model.generate(
-                inputs["input_ids"],
-                attention_mask=inputs["attention_mask"],
+                **inputs,
                 max_new_tokens=max_new_tokens,
-                num_beams=3,
+                do_sample=True,                 # ← включён sampling
                 temperature=FIXED_TEMPERATURE,
-                no_repeat_ngram_size=2,
-                do_sample=True,
                 top_p=0.9,
+                no_repeat_ngram_size=2,
+                num_beams=1,                    # beam-search не нужен
                 pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
-                early_stopping=True,
             )
-        generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-        answer = generated_text.split("Answer:")[-1].strip()
-        # Clear GPU cache if needed
-        torch.cuda.empty_cache()
+
+        text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        answer = text.split("Answer:")[-1].strip()
         return answer
+
     except Exception as e:
-        print(f"Error in generate_answer: {str(e)}")
+        print(f"[generate_answer] {e}")
         return "Sorry, I couldn't generate an answer due to an error."
 
-# =============================================================================
-# Semantic similarity evaluator using embeddings (unchanged)
-# =============================================================================
 
-def evaluate_llm_accuracy(question, predicted_answer, ground_truth_answer, generation_model, tokenizer, max_new_tokens=150):
-    prompt = f"""
-        System: You are a helpful assistant.
-        User: \"\"\"===Task===
-        I need your help in evaluating an answer provided by an LLM against a ground truth answer. Your task is to determine if the ground truth answer is present in the LLM’s response. Please analyze the provided data and make a decision.
-        ===Instructions===
-        1. Carefully compare the "Predicted Answer" with the "Ground Truth Answer".
-        2. Consider the substance of the answers – look for equivalent information or correct answers. Do not focus on exact wording unless the exact wording is crucial to the meaning.
-        3. Your final decision should be based on whether the meaning and the vital facts of the "Ground Truth Answer" are present in the "Predicted Answer:"
-        ===Input Data===
-        - Question: {question}
-        - Predicted Answer: {predicted_answer}
-        - Ground Truth Answer: {ground_truth_answer}
-        ===Output Format===
-        Provide your final evaluation in the following format (without any extra words):
-        "Explanation:" (How you made the decision?)
-        "Decision:" ("TRUE" or "FALSE")
+def evaluate_llm_accuracy(
+    question: str,
+    predicted_answer: str,
+    ground_truth_answer: str,
+    judge_model,      # ← kept for call-site compatibility (ignored here)
+    tokenizer,             # ← kept (ignored)
+    max_new_tokens: int = 150,
+):
+    """
+    Returns (score:int, explanation:str).
 
-        Please proceed with the evaluation. \"\"\" 
-        """
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True)
-    gen_device = next(generation_model.parameters()).device
-    inputs = {k: v.to(gen_device) for k, v in inputs.items()}
-    with torch.no_grad():
-        outputs = generation_model.generate(**inputs, max_new_tokens=max_new_tokens, temperature=FIXED_TEMPERATURE)
-    full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    if " Explanation: " in full_output:
-        generated_text = full_output.split(" Explanation: ", 1)[1].strip()
-    else:
-        raise ValueError("No 'Explanation:' found in the generated text.")
-    if "Decision:" in generated_text:
-        decision_line = generated_text.split("Decision:", 1)[1].strip()
-        decision_word = decision_line.split()[0]
-        decision = decision_word.upper()
-    else:
-        decision = "not given"
-        print("No 'Decision:' found in the generated text.")
-    score = 1 if decision == "TRUE" else 0
-    return score, generated_text
+    We replace the old “LLM-as-judge” with a single NLI forward-pass.
+    * entailment prob >= 0.5  → Decision TRUE
+    * entailment prob < 0.5 → Decision FALSE
+    """
+    try:
+        # (1) получаем вероятность энтэйлмента
+        probs = judge_model.predict(
+            [(predicted_answer, ground_truth_answer)],
+            apply_softmax=True            # ← вернёт np.array shape (1, 3)
+        )[0]                              # → [contr, neutral, entail]
+        prob_entail = float(probs[2])     # индекс 2 — entailment
+
+        # (2) превращаем в 0 / 1
+        score = 1 if prob_entail >= 0.5 else 0
+        explanation = f"Entailment prob = {prob_entail:.2f}"
+
+        if score == 0:
+            print("[evaluate_llm_accuracy] entailment < 0.5 → score=0")
+        return score, explanation
+
+    except Exception as e:
+        print(f"[evaluate_llm_accuracy] {e} – returning score=0")
+        return 0, ""

@@ -1,24 +1,53 @@
 # experiments_config.yaml
 datasets:
   - delucionqa
-  #- finqa
+  - emanual
+  - pubmedqa
+  - techqa
+  - hagrid
+  - msmarco
+  - covidqa
 
 experiments:
   # ── SOM ─────────────────────────────────
+  - {method: som, rare_percent: 0.2}
   - {method: som, rare_percent: 0.4}
-  #- {method: som, rare_percent: 0.6}
-  #- {method: som, rare_percent: 0.8}
+  - {method: som, rare_percent: 0.6}
+  - {method: som, rare_percent: 0.75}
+  - {method: som, rare_percent: 0.9}
 
   # ── Standard ───────────────────────────
-  - {method: standard, threshold_standard: 0.7}
+  - {method: standard, threshold_standard: 0.2}
+  - {method: standard, threshold_standard: 0.4}
+  - {method: standard, threshold_standard: 0.6}
+  - {method: standard, threshold_standard: 0.75}
+  - {method: standard, threshold_standard: 0.9}
 
   # ── Double-pass ────────────────────────
-  - {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.6, merging_threshold: 0.6}
-  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.6, merging_threshold: 0.9}
-  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.9, merging_threshold: 0.6}
-  #- {method: double_pass, initial_threshold: 0.5,  appending_threshold: 0.9, merging_threshold: 0.9}
-
-  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.6, merging_threshold: 0.6}
-  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.6, merging_threshold: 0.9}
-  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.9, merging_threshold: 0.6}
-  #- {method: double_pass, initial_threshold: 0.75, appending_threshold: 0.9, merging_threshold: 0.9}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.4, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.4, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.4, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.6, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.6, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.6, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.8, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.8, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.25, appending_threshold: 0.8, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.4, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.4, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.4, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.6, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.6, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.6, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.8, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.8, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.45, appending_threshold: 0.8, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.4, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.4, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.4, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.6, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.6, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.6, merging_threshold: 0.85}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.8, merging_threshold: 0.25}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.8, merging_threshold: 0.65}
+  - {method: double_pass, initial_threshold: 0.65, appending_threshold: 0.8, merging_threshold: 0.85}

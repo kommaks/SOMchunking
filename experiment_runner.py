@@ -64,7 +64,7 @@ class SemanticSimilarityEvaluator(BaseEvaluator):
     ) -> EvaluationResult:
         return self.evaluate(response=response, reference=reference, **kwargs)
 
-def evaluate_rag_methods(method, dataset, som_trainer, embedding_model, generation_model, tokenizer,
+def evaluate_rag_methods(method, dataset, som_trainer, embedding_model, generation_model, judge_model, tokenizer,
                            threshold_standard, min_chunk_size,
                            initial_threshold, appending_threshold, merging_threshold,
                            max_chunk_length=3, max_samples=10, visualize=False, local_rare_clusters=None):
@@ -114,7 +114,7 @@ def evaluate_rag_methods(method, dataset, som_trainer, embedding_model, generati
                     probs = softmax(logits.cpu().numpy(), axis=-1)
                     confidence_score = np.mean(np.max(probs, axis=-1))
                 eval_result = semantic_evaluator.evaluate(response=predicted_answer, reference=expected_answer)
-                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, generation_model, tokenizer)
+                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, judge_model, tokenizer)
                 metrics["standard"]['relevance_scores'].append(relevance_score)
                 metrics["standard"]['confidence_scores'].append(confidence_score)
                 metrics["standard"]['semantic_similarity'].append(eval_result.score)
@@ -148,7 +148,7 @@ def evaluate_rag_methods(method, dataset, som_trainer, embedding_model, generati
                     probs = softmax(logits.cpu().numpy(), axis=-1)
                     confidence_score = np.mean(np.max(probs, axis=-1))
                 eval_result = semantic_evaluator.evaluate(response=predicted_answer, reference=expected_answer)
-                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, generation_model, tokenizer)
+                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, judge_model, tokenizer)
                 metrics["double_pass"]['relevance_scores'].append(relevance_score)
                 metrics["double_pass"]['confidence_scores'].append(confidence_score)
                 metrics["double_pass"]['semantic_similarity'].append(eval_result.score)
@@ -182,7 +182,7 @@ def evaluate_rag_methods(method, dataset, som_trainer, embedding_model, generati
                     probs = softmax(logits.cpu().numpy(), axis=-1)
                     confidence_score = np.mean(np.max(probs, axis=-1))
                 eval_result = semantic_evaluator.evaluate(response=predicted_answer, reference=expected_answer)
-                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, generation_model, tokenizer)
+                llm_acc, llm_eval_text = evaluate_llm_accuracy(question, predicted_answer, expected_answer, judge_model, tokenizer)
                 metrics["som"]['relevance_scores'].append(relevance_score)
                 metrics["som"]['confidence_scores'].append(confidence_score)
                 metrics["som"]['semantic_similarity'].append(eval_result.score)
@@ -241,7 +241,7 @@ def get_rare_clusters(cluster_counts, rare_percent):
     return clusters_sorted[:n_rare]
 
 
-def run_experiment(exp_params, max_samples, som_trainer, threshold_standard, min_chunk_size, initial_threshold, appending_threshold, merging_threshold, max_chunk_length, visualize, dataset_names, cluster_counts, dataset, embedding_model, generation_model, tokenizer):
+def run_experiment(exp_params, max_samples, som_trainer, threshold_standard, min_chunk_size, initial_threshold, appending_threshold, merging_threshold, max_chunk_length, visualize, dataset_names, cluster_counts, dataset, embedding_model, generation_model, judge_model, tokenizer):
     method = exp_params["method"]
     
     if method == "double_pass":
@@ -255,6 +255,7 @@ def run_experiment(exp_params, max_samples, som_trainer, threshold_standard, min
             som_trainer,
             embedding_model,
             generation_model,
+            judge_model,
             tokenizer,
             threshold_standard,   # для double_pass этот параметр не используется
             min_chunk_size,
@@ -277,6 +278,7 @@ def run_experiment(exp_params, max_samples, som_trainer, threshold_standard, min
             som_trainer,
             embedding_model,
             generation_model,
+            judge_model,
             tokenizer,
             local_threshold_standard,
             min_chunk_size,
@@ -300,6 +302,7 @@ def run_experiment(exp_params, max_samples, som_trainer, threshold_standard, min
             som_trainer,
             embedding_model,
             generation_model,
+            judge_model,
             tokenizer,
             threshold_standard,
             min_chunk_size,

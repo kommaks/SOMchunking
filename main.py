@@ -45,89 +45,67 @@ if torch.cuda.is_available():
     # Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ РЅР°СЃС‚СЂРѕР№РєР° GPU: РІРєР»СЋС‡РµРЅРёРµ РѕРїС‚РёРјРёР·Р°С†РёРё cuDNN РґР»СЏ СѓСЃРєРѕСЂРµРЅРёСЏ РІС‹С‡РёСЃР»РµРЅРёР№
     torch.backends.cudnn.benchmark = True
 
+from datasets import load_dataset     # уже есть, просто напоминание
+
+def predownload_datasets(ds_names, cache_dir=None, max_retries=3, delay=5):
+    print("=" * 60)
+    print("Prefetching datasets so we can work fully offline later …")
+    for name in ds_names:
+        for attempt in range(1, max_retries + 1):
+            try:
+                _ = load_dataset(
+                    "rungalileo/ragbench",
+                    name,
+                    cache_dir=cache_dir,
+                    download_mode="reuse_dataset_if_exists",
+                )
+                print(f"  ✔  {name} cached")
+                break
+            except Exception as e:
+                print(f"  ✖  {name} attempt {attempt}/{max_retries} failed: {e}")
+                if attempt == max_retries:
+                    print("     will retry later in the main loop")
+                else:
+                    time.sleep(delay)
+
+    # с этого момента интернет не нужен для HF datasets
+    os.environ["HF_DATASETS_OFFLINE"] = "1"
+    print("=" * 60)
+
+# --- вверху файла ----
+import argparse
+# ...
+
+def parse_args():
+    p = argparse.ArgumentParser()
+    p.add_argument("--num_samples", type=int, default=500)
+    p.add_argument("--m", type=int, default=20)
+    p.add_argument("--n", type=int, default=35)
+    p.add_argument("--dataset", type=str, help="run only this dataset")
+    return p.parse_args()
+
 def main():
-    if len(sys.argv) != 4:
-        print("Usage: python RunInference.py <num_samples> <m> <n>")
-        sys.exit(1)
-    try:
-        max_samples = int(sys.argv[1])
-        m = int(sys.argv[2])
-        n = int(sys.argv[3])
-    except ValueError:
-        print("Please provide valid integers for num_samples, m, and n.")
-        sys.exit(1)
+    args = parse_args()
+    max_samples = args.num_samples
+    m, n       = args.m, args.n
+
+    # список датасетов берём из YAML, но можем сузить:
+    datasets_to_run = DATASET_NAMES
+    if args.dataset:
+        datasets_to_run = [args.dataset]
     print(f"Using max_samples = {max_samples}, m = {m}, n = {n}")
+    print(f"Running on datasets: {datasets_to_run}")
     
     overall_results = {}
     overall_metrics = {}
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
-    embedding_model, generation_model, tokenizer = initialize_models(device)
-    """
-    experiments = []
-    DATASET_NAMES = [
-	'delucionqa', 'finqa'
-    ]
-    #     'cuad', 
-     #'expertqa', 'techqa', 'covidqa', 
-
-    # Р”РІР° СЌРєСЃРїРµСЂРёРјРµРЅС‚Р°: СЃС‚Р°РЅРґР°СЂС‚РЅС‹Р№ Рё SOM
-    experiments = [
-            {"method": "som", "rare_percent": 0.4},
-            {"method": "som", "rare_percent": 0.6},
-            {"method": "som", "rare_percent": 0.8},
-    ]
-    for ts in [0.7]:
-        experiments.append({"method": "standard", "threshold_standard": ts})
-    for init_t in [0.5, 0.75]:
-        for app_t in [0.6, 0.9]:
-            for merge_t in [0.6, 0.9]:
-                experiments.append({
-                    "method": "double_pass",
-                    "initial_threshold": init_t,
-                    "appending_threshold": app_t,
-                    "merging_threshold": merge_t
-                })
-    """
-    # takes 230 seconds for 1 expierement and 1 sample for all 16 datasets
+    embedding_model, generation_model, tokenizer, judge_model = initialize_models(device)
     
-    # Р­РєСЃРїРµСЂРёРјРµРЅС‚С‹ РґР»СЏ РјРµС‚РѕРґР° "standard": РІР°СЂСЊРёСЂСѓРµРј threshold_standard
-   # for ts in [0.2, 0.4, 0.5, 0.6, 0.75, 0.9]:
-    #    experiments.append({"method": "standard", "threshold_standard": ts})
-    """
-    # Р­РєСЃРїРµСЂРёРјРµРЅС‚С‹ РґР»СЏ РјРµС‚РѕРґР° "double_pass": РїРµСЂРµР±РёСЂР°РµРј РєРѕРјР±РёРЅР°С†РёРё initial_threshold, appending_threshold Рё merging_threshold
-    for init_t in [0.2, 0.5, 0.75]:
-        for app_t in [0.3, 0.6, 0.9]:
-            for merge_t in [0.3, 0.6, 0.9]:
-                experiments.append({
-                    "method": "double_pass",
-                    "initial_threshold": init_t,
-                    "appending_threshold": app_t,
-                    "merging_threshold": merge_t
-                })
-    # Parameters for chunking methods
-threshold_standard = 0.3         # For standard chunking: threshold for cosine distance
-min_chunk_size = 2               # Minimum number of sentences in a chunk (standard method)
-initial_threshold = 0.7          # For double-pass method: initial threshold
-appending_threshold = 0.8        # For double-pass method: appending threshold
-merging_threshold = 0.7          # For double-pass method: merging threshold
-max_chunk_length = 3             # Maximum number of sentences per chunk in double-pass
-visualize = False                 # Print colored chunks during processing
-        experiments = [
-            {"method": "standard"},
-            {"method": "double_pass", "appending_threshold": 0.3},
-            {"method": "double_pass", "appending_threshold": 0.5},
-            {"method": "double_pass", "appending_threshold": 0.75},
-            {"method": "double_pass", "appending_threshold": 0.9},
-            {"method": "som", "rare_percent": 0.2},
-            {"method": "som", "rare_percent": 0.4},
-            {"method": "som", "rare_percent": 0.6},
-            {"method": "som", "rare_percent": 0.8},
-            {"method": "som", "rare_percent": 0.9},
-            {"method": "som", "rare_percent": 1.0},
-        ]
-    """
+    # >>> caching upfront <<<
+    predownload_datasets(datasets_to_run)
+    
     # Takes 104 minutes(1,73 hours) for 1 for 500 samples
     if max_samples < 20:
         first_samples = max_samples
@@ -136,7 +114,7 @@ visualize = False                 # Print colored chunks during processing
         
     base_dir = Path(__file__).parent
     exp_start_time = time.perf_counter()
-    for ds_name in DATASET_NAMES:
+    for ds_name in datasets_to_run:
         print("\n" + "="*50)
         print(f"Loading dataset: {ds_name}")
         try:
@@ -154,7 +132,7 @@ visualize = False                 # Print colored chunks during processing
         metrics_dict = {}
         for exp in EXPERIMENTS:
             print(f"Running experiment: {exp} on dataset: {ds_name}")
-            exp_key, res, met = run_experiment(exp, max_samples, som_trainer, threshold_standard, min_chunk_size, initial_threshold, appending_threshold, merging_threshold, max_chunk_length, visualize, DATASET_NAMES, cluster_counts, ds, embedding_model, generation_model, tokenizer)
+            exp_key, res, met = run_experiment(exp, max_samples, som_trainer, threshold_standard, min_chunk_size, initial_threshold, appending_threshold, merging_threshold, max_chunk_length, visualize, DATASET_NAMES, cluster_counts, ds, embedding_model, generation_model, judge_model, tokenizer)
             results_dict[exp_key] = res
             metrics_dict[exp_key] = met
         overall_results[ds_name] = results_dict
