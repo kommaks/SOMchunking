@@ -50,7 +50,3 @@ def double_pass_chunking(text: str, initial_threshold: float, appending_threshol
         merged_chunks.append(current_chunk)
         i += 1
     return merged_chunks
-
-# =============================================================================
-# SOM-based Chunking (as in original code)
-# =============================================================================
