@@ -26,10 +26,6 @@ def index_chunks(chunks, model):
     index.add(np.array(chunk_embeddings))
     return index, chunk_embeddings
 
-# =============================================================================
-# Model initialization and dataset loading
-# =============================================================================
-
 def retrieve_chunks_with_filtering(question, index, chunks, model, top_k=5, top_filtered_k=3):
     dev = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     question_embedding = model.encode([question], convert_to_tensor=True).to(dev)
@@ -40,7 +36,3 @@ def retrieve_chunks_with_filtering(question, index, chunks, model, top_k=5, top_
     ranked_indices = torch.argsort(scores, descending=True)
     filtered_chunks = [candidate_chunks[i] for i in ranked_indices[:top_filtered_k]]
     return filtered_chunks
-
-# =============================================================================
-# Evaluation of RAG methods (generating answers, computing metrics, and saving colored chunks)
-# =============================================================================
